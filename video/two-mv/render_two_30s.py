@@ -39,16 +39,17 @@ T = dict(
     red=(0.0, 0.6),        # giant TWO on red
     p1=(0.6, 2.9),         # paper: "TWO began with one question:"
     plateQ=(2.9, 4.0),     # real: hand on chin (04.mov)
-    p2=(4.0, 7.0),         # paper: "what does it really mean to create?"
-    panel=(7.0, 8.8),      # real: walking figure cut out in colour, in the thermal slot
-    p3=(8.8, 12.0),        # ignition -> thermal walk: "Not clothes for the sake of clothes."
-    p4=(12.0, 16.0),       # thermal seated profile -> cools to shadow -> develops into the print
-    plateS=(16.0, 18.0),   # real: hands on the embroidered cuff (10.mov)
-    p5=(18.0, 20.7),       # paper letters: "Each piece carries that search."
-    p6=(20.7, 24.1),       # thermal standing figure turns to us: "I hope it resonates with you too."
-    plateG=(24.1, 27.0),   # real: the gaze (04.mov)
-    outro=(27.0, 30.0),    # giant TWO on paper, caption, fade to flat paper white
+    p2=(4.0, 6.97),        # paper: "what does it really mean to create?"
+    panel=(6.97, 8.68),    # real: walking figure cut out in colour, in the thermal slot
+    p3=(8.68, 12.12),      # ignition -> thermal walk: "Not clothes for the sake of clothes."
+    p4=(12.12, 15.55),     # thermal seated profile -> cools to shadow -> develops into the print
+    plateS=(15.55, 17.30), # real: hands on the embroidered cuff (10.mov)
+    p5=(17.30, 20.7),      # paper letters: "Each piece carries that search."
+    p6=(20.7, 24.13),      # thermal standing figure turns to us: "I hope it resonates with you too."
+    plateG=(24.13, 27.56), # real: the gaze (04.mov)
+    outro=(27.56, 30.0),   # giant TWO on paper (on the bed's last chord), caption, fade to flat paper white
 )
+# cuts sit 0-80 ms before the music bed's accents (69.8 bpm grid, see mix_audio.MUSIC_DELAY)
 IGNITE = 8 / FPS           # seconds of real -> thermal cross at the start of p3
 PHRASE_TEXT = {
     "p1": "TWO began with one question:",
@@ -59,14 +60,14 @@ PHRASE_TEXT = {
     "p5": "Each piece carries that search.",
     "p6": "I hope it resonates with you too.",
 }
-FALLBACK_START = {"p1": 0.8, "p2": 4.2, "p3": 9.0, "p4a": 12.2, "p4b": 13.9, "p5": 18.2, "p6": 20.9}
+FALLBACK_START = {"p1": 0.8, "p2": 4.2, "p3": 8.9, "p4a": 12.35, "p4b": 14.05, "p5": 17.5, "p6": 20.9}
 CLIPS = {
     "walk": "01.mov@2.2:scale=1.5:y=0.12",                # panel 2.2-4.0 s, thermal 4.0-7.2 s
     "seat": "05.mov@1.0:scale=1.5:y=0.22",                # seated profile, faces the text
     "stand": "10.mov@4.2:flip:scale=1.6:y=0.08",          # head turns to camera ~1.2 s in
 }
 PLATES = {"plateQ": "Q", "plateS": "S", "plateG": "G"}
-PLATE_PUSH = {"plateQ": 0.0, "plateS": 0.0, "plateG": 0.04}
+PLATE_PUSH = {"plateQ": 0.0, "plateS": 0.0, "plateG": 0.05}
 
 VIG_PLATE = R._vignette(0.34)
 
@@ -262,9 +263,9 @@ def frame_at(t, S, plates, times, idx):
     elif in_scene("p4"):
         s = tl("p4")
         ta, tb = times["p4a"], times["p4b"]
-        cool_t0 = tb[0] + 0.55
-        cool = ease_in_out((t - cool_t0) / 0.55)
-        dev_t0 = T["p4"][1] - 1.0                              # develop over 12 frames, then hold
+        cool_t0 = tb[0] + 0.35
+        cool = ease_in_out((t - cool_t0) / 0.5)
+        dev_t0 = T["p4"][1] - 0.62                             # develop over 12 frames, then a short hold
         dev = ease_in_out((t - dev_t0) / (12 / FPS))
         img = bg_image("black", mix=cool)
         arr = np.array(img, np.float32)
@@ -338,11 +339,11 @@ def frame_at(t, S, plates, times, idx):
         img = bg_image("paper")
         d = ImageDraw.Draw(img)
         s = tl("outro")
-        guides = 1 - ease_in_out((s - 1.9) / 0.3)
+        guides = 1 - ease_in_out((s - 1.55) / 0.3)
         giant_word(img, d, "TWO", s, INK, -0.22 * W, dashes=guides > 0.5)
-        if s > 0.6:
+        if s > 0.55:
             draw_words(d, "made with purpose.", F_TINY, W * 0.5, H * 0.86, t,
-                       reveal_times(T["outro"][0] + 0.65, 3, 0.2), INK, INK_LIGHT, align="center", cursor=True)
+                       reveal_times(T["outro"][0] + 0.6, 3, 0.2), INK, INK_LIGHT, align="center", cursor=True)
         cut_glitch("outro", (0, H * 0.2, W, H * 0.8), 22, 3)
 
     for box, factor in glitch:

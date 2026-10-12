@@ -4,27 +4,27 @@
    "key": "p1",
    "text": "TWO began with one question:",
    "start": 0.8,
-   "end": 2.64,
+   "end": 2.715,
    "words": [
     {
      "w": "TWO",
-     "t": 0.717
+     "t": 0.7
     },
     {
      "w": "began",
-     "t": 0.997
+     "t": 1.055
     },
     {
      "w": "with",
-     "t": 1.477
+     "t": 1.535
     },
     {
      "w": "one",
-     "t": 1.757
+     "t": 1.815
     },
     {
      "w": "question:",
-     "t": 2.037
+     "t": 2.095
     }
    ]
   },
@@ -32,139 +32,139 @@
    "key": "p2",
    "text": "what does it really mean to create?",
    "start": 4.2,
-   "end": 6.28,
+   "end": 6.355,
    "words": [
     {
      "w": "what",
-     "t": 4.117
+     "t": 4.1
     },
     {
      "w": "does",
-     "t": 4.257
+     "t": 4.315
     },
     {
      "w": "it",
-     "t": 4.457
+     "t": 4.515
     },
     {
      "w": "really",
-     "t": 4.737
+     "t": 4.795
     },
     {
      "w": "mean",
-     "t": 5.177
+     "t": 5.235
     },
     {
      "w": "to",
-     "t": 5.557
+     "t": 5.615
     },
     {
      "w": "create?",
-     "t": 5.717
+     "t": 5.775
     }
    ]
   },
   {
    "key": "p3",
    "text": "Not clothes for the sake of clothes.",
-   "start": 9.0,
-   "end": 10.72,
+   "start": 8.9,
+   "end": 10.655000000000001,
    "words": [
     {
      "w": "Not",
-     "t": 8.917
+     "t": 8.8
     },
     {
      "w": "clothes",
-     "t": 9.177
+     "t": 9.095
     },
     {
      "w": "for",
-     "t": 9.557
+     "t": 9.475
     },
     {
      "w": "the",
-     "t": 9.677
+     "t": 9.595
     },
     {
      "w": "sake",
-     "t": 9.817
+     "t": 9.735
     },
     {
      "w": "of",
-     "t": 10.017
+     "t": 9.935
     },
     {
      "w": "clothes.",
-     "t": 10.177
+     "t": 10.095
     }
    ]
   },
   {
    "key": "p4a",
    "text": "but something intentional,",
-   "start": 12.2,
-   "end": 13.52,
+   "start": 12.35,
+   "end": 13.74,
    "words": [
     {
      "w": "but",
-     "t": 12.117
+     "t": 12.25
     },
     {
      "w": "something",
-     "t": 12.317
+     "t": 12.52
     },
     {
      "w": "intentional,",
-     "t": 12.757
+     "t": 12.96
     }
    ]
   },
   {
    "key": "p4b",
    "text": "made with purpose.",
-   "start": 13.9,
-   "end": 14.82,
+   "start": 14.05,
+   "end": 15.02,
    "words": [
     {
      "w": "made",
-     "t": 13.817
+     "t": 13.95
     },
     {
      "w": "with",
-     "t": 14.017
+     "t": 14.2
     },
     {
      "w": "purpose.",
-     "t": 14.237
+     "t": 14.42
     }
    ]
   },
   {
    "key": "p5",
    "text": "Each piece carries that search.",
-   "start": 18.2,
-   "end": 20.02,
+   "start": 17.5,
+   "end": 19.369999999999997,
    "words": [
     {
      "w": "Each",
-     "t": 18.117
+     "t": 17.4
     },
     {
      "w": "piece",
-     "t": 18.417
+     "t": 17.75
     },
     {
      "w": "carries",
-     "t": 18.937
+     "t": 18.27
     },
     {
      "w": "that",
-     "t": 19.337
+     "t": 18.67
     },
     {
      "w": "search.",
-     "t": 19.577
+     "t": 18.91
     }
    ]
   },
@@ -172,35 +172,35 @@
    "key": "p6",
    "text": "I hope it resonates with you too.",
    "start": 20.9,
-   "end": 22.380000000000003,
+   "end": 22.475,
    "words": [
     {
      "w": "I",
-     "t": 20.817
+     "t": 20.8
     },
     {
      "w": "hope",
-     "t": 20.877
+     "t": 20.955
     },
     {
      "w": "it",
-     "t": 21.057
+     "t": 21.135
     },
     {
      "w": "resonates",
-     "t": 21.197
+     "t": 21.275
     },
     {
      "w": "with",
-     "t": 21.697
+     "t": 21.775
     },
     {
      "w": "you",
-     "t": 21.877
+     "t": 21.955
     },
     {
      "w": "too.",
-     "t": 22.057
+     "t": 22.135
     }
    ]
   }
