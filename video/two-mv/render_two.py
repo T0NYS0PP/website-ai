@@ -13,14 +13,15 @@ Style notes (from the reference):
   * scattered single letters drifting on white with red scribbled circles
   * a giant cropped word on a red card as the opener, and again as the outro
 
-Footage slots: scenes 3, 4 and 6 show a silhouette. With --footage DIR the
-silhouette is cut from real clips (DIR/clipA.mp4, clipB.mp4, clipC.mp4, any
-length; luminance is keyed and pushed through the thermal colour map).
-Without it a procedural garment silhouette is used, so the film still works
-as a complete piece.
+Footage slots: scenes 3, 4 and 6 show a silhouette. With --footage DIR and
+--clips the silhouette is cut from real clips: the person is segmented
+(rembg / u2net_human_seg when installed, else a background-plate difference)
+and pushed through the thermal colour map. Without footage a procedural
+garment silhouette is used, so the film still works as a complete piece.
 
 Usage:
-  python3 render_two.py out.mp4 [--footage DIR] [--scale 1.0] [--start S --end S]
+  python3 render_two.py out.mp4 [--footage DIR --clips "01.mov@3.0:flip,04.mov@0.5,10.mov@4.0"]
+                                 [--start S --end S] [--crf N]
 """
 import argparse
 import math
@@ -28,7 +29,6 @@ import os
 import random
 import subprocess
 import sys
-import tempfile
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
@@ -315,49 +315,135 @@ def procedural_mask(t, slot):
     return arr
 
 
+def _probe_dims(path):
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                          "-show_entries", "stream=width,height", "-of", "csv=p=0", path],
+                         capture_output=True, text=True, check=True).stdout.strip().split(",")
+    return int(out[0]), int(out[1])
+
+
+def _extract(path, offset, duration, height, flip, fps=FPS):
+    """RGB frames (n,h,w,3) uint8 of a clip window, scaled to `height`."""
+    W0, H0 = _probe_dims(path)
+    w = int(round(W0 * height / H0 / 2)) * 2
+    vf = f"fps={fps},scale={w}:{height}" + (",hflip" if flip else "")
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(offset), "-i", path, "-t", str(duration),
+                          "-vf", vf, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                         capture_output=True, check=True).stdout
+    n = len(raw) // (height * w * 3)
+    return np.frombuffer(raw[:n * height * w * 3], np.uint8).reshape(n, height, w, 3)
+
+
+def _matte_rembg(frames, model="u2net"):
+    from rembg import remove, new_session       # salient-object segmentation
+    sess = new_session(model)
+    out = []
+    for f in frames:
+        m = remove(Image.fromarray(f), session=sess, only_mask=True, post_process_mask=True)
+        out.append(np.array(m, np.float32) / 255.0)
+    m = np.stack(out)
+    return np.clip((m - 0.25) / 0.5, 0, 1)
+
+
+def _matte_plate(frames, path, height, flip):
+    """Locked-off shot where the subject moves: background = temporal median."""
+    ref = _extract(path, 0, 10 ** 6, height, flip, fps=2).astype(np.float32)
+    plate = np.median(ref, axis=0)
+    d = np.sqrt(((frames.astype(np.float32) - plate) ** 2).sum(-1))
+    return np.clip((d - 18) / 42, 0, 1)
+
+
+def _matte_key(frames):
+    """Fallback: colour distance from the frame border colour."""
+    f = frames.astype(np.float32)
+    h, w = f.shape[1:3]
+    border = np.concatenate([f[:, :, :w // 10].reshape(-1, 3), f[:, :, -w // 10:].reshape(-1, 3)])
+    bg = np.median(border, axis=0)
+    d = np.sqrt(((f - bg) ** 2).sum(-1))
+    return np.clip((d - 22) / 48, 0, 1)
+
+
 class FootageSlot:
-    """Frames of a real clip, keyed by luminance, at mask resolution."""
+    """A real clip, matted and placed on the right side of the frame.
 
-    invert = None    # None = auto-detect per clip, True/False = force
+    spec syntax for --clips:  NAME@OFFSET[:flip][:scale=1.25][:method=auto|rembg|plate|key][:y=0.04][:model=u2net]
+      offset  in-point in seconds
+      flip    mirror the clip (so the figure faces the text)
+      scale   clip height relative to the frame height (crops top/bottom)
+      y       where the crop window starts, as a fraction of the scaled clip
+    Masks are precomputed for the slot's duration and cached as .npy next to
+    the footage, so re-renders are instant."""
 
-    def __init__(self, path, tmpdir, offset=0.0):
-        self.dir = os.path.join(tmpdir, os.path.basename(path) + "_frames")
-        os.makedirs(self.dir, exist_ok=True)
-        subprocess.run([
-            "ffmpeg", "-v", "error", "-y", "-ss", str(offset), "-i", path,
-            "-t", "6",
-            "-vf", f"fps={FPS},scale={MW}:{MH}:force_original_aspect_ratio=increase,"
-                   f"crop={MW}:{MH},format=gray",
-            os.path.join(self.dir, "%05d.png")], check=True)
-        self.n = len(os.listdir(self.dir))
-        self.inv = FootageSlot.invert
-        if self.inv is None:
-            self.inv = self._detect_polarity()
+    def __init__(self, path, offset=0.0, duration=3.8, flip=False, scale=1.25,
+                 method="auto", ypos=0.04, model="u2net", cache_dir=None):
+        self.path = path
+        height = int(round(MH * scale / 2)) * 2
+        tag = f"{os.path.basename(path)}_{offset}_{duration}_{int(flip)}_{scale}_{method}-{model}_{ypos}_{MW}x{MH}"
+        cache_dir = cache_dir or os.path.join(os.path.dirname(path) or ".", ".cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        cache = os.path.join(cache_dir, tag + ".npy")
+        if os.path.exists(cache):
+            self.masks = np.load(cache)
+            self.method = method + " (cached)"
+            return
+        frames = _extract(path, offset, duration, height, flip)
+        used = method
+        if method in ("auto", "rembg"):
+            try:
+                m = _matte_rembg(frames, model)
+                used = f"rembg/{model}"
+            except ImportError:
+                if method == "rembg":
+                    raise
+                used = "plate"
+        if used == "plate":
+            m = _matte_plate(frames, path, height, flip)
+        elif used == "key":
+            m = _matte_key(frames)
+        # temporal smoothing against flicker
+        if len(m) > 2:
+            m = np.concatenate([m[:1], 0.25 * m[:-2] + 0.5 * m[1:-1] + 0.25 * m[2:], m[-1:]])
+        # place into the frame: vertical window, right-aligned (or centre crop if wider)
+        n, h, w = m.shape
+        y0 = int(ypos * h)
+        y1 = min(h, y0 + MH)
+        out = np.zeros((n, MH, MW), np.float32)
+        if w >= MW:
+            xc = (w - MW) // 2
+            out[:, :y1 - y0, :] = m[:, y0:y1, xc:xc + MW]
+        else:
+            xo = MW - w - int(0.02 * MW)
+            out[:, :y1 - y0, xo:xo + w] = m[:, y0:y1, :]
+        self.masks = out
+        self.method = used
+        np.save(cache, out)
 
-    def _frame(self, i):
-        im = Image.open(os.path.join(self.dir, f"{i:05d}.png"))
-        return np.array(im, np.float32) / 255.0
-
-    def _detect_polarity(self):
-        """True when the subject (frame centre) is darker than the backdrop
-        (frame border), e.g. a dark garment against a white wall."""
-        samples = [self._frame(i) for i in range(1, self.n + 1, max(1, self.n // 6))]
-        border, centre = [], []
-        for a in samples:
-            h, w = a.shape
-            border.append(np.median(np.concatenate([a[:h // 8].ravel(), a[-h // 8:].ravel(),
-                                                    a[:, :w // 8].ravel(), a[:, -w // 8:].ravel()])))
-            centre.append(np.median(a[h // 4:-h // 4, w // 4:-w // 4]))
-        return float(np.median(centre)) < float(np.median(border))
+    @property
+    def n(self):
+        return len(self.masks)
 
     def mask(self, t_local):
-        i = int(t_local * FPS) % max(1, self.n) + 1
-        arr = self._frame(i)
-        if self.inv:
-            arr = 1.0 - arr
-        # key: brighter than the dark backdrop -> part of the subject
-        lo, hi = 0.18, 0.45
-        return np.clip((arr - lo) / (hi - lo), 0, 1)
+        i = min(int(t_local * FPS), len(self.masks) - 1)
+        return self.masks[i]
+
+
+def parse_clip_spec(spec, footage_dir):
+    """'01.mov@3.0:flip:scale=1.3' -> kwargs for FootageSlot."""
+    parts = spec.strip().split(":")
+    name, _, off = parts[0].partition("@")
+    kw = dict(path=os.path.join(footage_dir, name), offset=float(off or 0))
+    for p in parts[1:]:
+        if p == "flip":
+            kw["flip"] = True
+        elif p.startswith("scale="):
+            kw["scale"] = float(p[6:])
+        elif p.startswith("method="):
+            kw["method"] = p[7:]
+        elif p.startswith("y="):
+            kw["ypos"] = float(p[2:])
+        elif p.startswith("model="):
+            kw["model"] = p[6:]
+    return kw
 
 
 _THERMAL_STOPS = [
@@ -396,10 +482,14 @@ def render_silhouette(bg_arr, mask_small, t, mode, intensity=1.0, cool=0.0):
     # the bright rim the reference has where the fabric edge faces the lens
     rim = np.clip(soft - core, 0, 1) * 0.55
     v = v + rim * intensity
-    # a hot spot that blooms near the bottom (the reference glows at the base)
-    hx, hy = 0.75 * MW, 1.04 * MH
+    # a hot spot that blooms at the base of the figure (the reference glows there)
+    ys, xs = np.nonzero(mask_small > 0.5)
+    if len(xs) > 50:
+        hx, hy = float(xs.mean()), float(np.percentile(ys, 92)) + 0.08 * MH
+    else:
+        hx, hy = 0.75 * MW, 1.04 * MH
     glow = np.exp(-(((xx - hx) / (0.11 * MW)) ** 2 + ((yy - hy) / (0.17 * MH)) ** 2))
-    v = v + glow * core * 0.8 * intensity
+    v = v + glow * core * 0.62 * intensity
     v = np.clip(v, 0, 1)
     thermal = thermal_colormap(v)
     alpha = np.clip(soft * 2.2, 0, 1) * intensity
@@ -646,36 +736,30 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
     ap.add_argument("--footage", help="dir with the MV clips (.mov/.mp4)")
-    ap.add_argument("--clips", help="comma list of 3 file names in --footage, in scene order")
-    ap.add_argument("--offsets", help="comma list of 3 in-points (seconds) for the clips")
+    ap.add_argument("--clips", help="comma list of up to 3 clip specs, in scene order: "
+                                    "NAME@OFFSET[:flip][:scale=1.25][:method=auto|rembg|plate|key][:y=0.04]")
     ap.add_argument("--start", type=float, default=0.0)
     ap.add_argument("--end", type=float, default=DURATION)
     ap.add_argument("--crf", type=int, default=20)
-    ap.add_argument("--key-invert", action="store_true",
-                    help="footage subject is darker than its background")
     args = ap.parse_args()
 
-    tmpdir = tempfile.mkdtemp(prefix="two_mv_")
     slots = []
-    clips = []
+    specs = []
     if args.footage:
         if args.clips:
-            clips = [os.path.join(args.footage, c.strip()) for c in args.clips.split(",")]
+            specs = [c for c in args.clips.split(",") if c.strip()]
         else:
             names = sorted(n for n in os.listdir(args.footage)
                            if n.lower().endswith((".mov", ".mp4", ".m4v", ".mkv")))
-            # legacy names clipA/B/C first, else the first three clips in name order
-            legacy = [n for n in names if n.lower().startswith("clip")]
-            clips = [os.path.join(args.footage, n) for n in (legacy or names)[:3]]
-    offsets = [float(x) for x in args.offsets.split(",")] if args.offsets else []
+            specs = names[:3]
     for i in range(3):
-        path = clips[i] if i < len(clips) else None
-        if path and os.path.exists(path):
-            if args.key_invert:
-                FootageSlot.invert = True
-            fs = FootageSlot(path, tmpdir, offsets[i] if i < len(offsets) else 0.0)
+        if i < len(specs):
+            kw = parse_clip_spec(specs[i], args.footage)
+            if not os.path.exists(kw["path"]):
+                sys.exit(f"clip not found: {kw['path']}")
+            fs = FootageSlot(**kw)
             slots.append(fs.mask)
-            print(f"slot {i}: {path} ({fs.n} frames, invert={fs.inv})", file=sys.stderr)
+            print(f"slot {i}: {specs[i]} -> {fs.n} frames, matte={fs.method}", file=sys.stderr)
         else:
             slots.append(lambda tl, s=i: procedural_mask(tl, s))
             print(f"slot {i}: procedural garment silhouette", file=sys.stderr)
