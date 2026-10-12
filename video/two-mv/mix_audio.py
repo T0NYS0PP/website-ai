@@ -37,7 +37,7 @@ import numpy as np
 
 SR = 48000
 TOTAL = 30.0
-MUSIC_DELAY = 1.07       # bed accents at 0.79 + k*1.716 s then land 0-80 ms after the cuts
+MUSIC_DELAY = 2.786      # same accent phase as 1.07 (+1 bar): cuts stay on the grid, the loud last chord (raw 23.98 s) rings under the end card
 LEAD = 0.10              # on-screen word leads the audible onset by this much
 PHRASES = [
     ("p1", "TWO began with one question:"),
@@ -49,10 +49,11 @@ PHRASES = [
     ("p6", "I hope it resonates with you too."),
 ]
 PLACEMENT = {"p1": 0.8, "p2": 4.2, "p3": 8.9, "p4a": 12.35, "p4b": 14.05, "p5": 17.5, "p6": 20.9}
-CUTS = [0.6, 2.9, 4.0, 6.97, 8.68, 12.12, 15.55, 17.30, 20.7, 24.13, 27.56]   # picture cuts (render_two_30s.T)
+CUTS = [0.6, 3.0, 4.0, 6.97, 8.68, 12.12, 15.55, 17.30, 20.7, 24.13, 27.56]   # picture cuts (render_two_30s.T)
 
 VO_GAIN_DB = 3.4         # radio stem measured -16.4 LUFS -> ~-13
-BED_GAIN_DB = -0.5       # music.mp3 measured -16.8 LUFS -> ~-17.3 solo
+BED_GAIN_DB = 1.5        # music.mp3 measured -16.8 LUFS; +2 dB so the phone band sits near -27 dBFS in the gaps
+SEG_GAIN_DB = {"p1": -1.0}   # the first line was the loudest moment of the spot
 DUCK_DB = -8.0
 
 
@@ -226,19 +227,22 @@ def main():
         seg[:ni] *= np.linspace(0, 1, ni, dtype=np.float32)
         seg[-no:] *= np.linspace(1, 0, no, dtype=np.float32)
         start = int((place - (s0 - a)) * SR)
-        vo_track[start:start + len(seg)] += seg
+        vo_track[start:start + len(seg)] += seg * 10 ** (SEG_GAIN_DB.get(k, 0.0) / 20)
     vo_track *= 10 ** (VO_GAIN_DB / 20)
 
     # ---- music bed: delayed, static gain, ducked by the phrase envelope
-    bed = decode(os.path.join(d, "music.mp3"), mono=False)
+    # a little body at 250-600 Hz so the bed survives a phone speaker
+    run(["ffmpeg", "-v", "error", "-y", "-i", os.path.join(d, "music.mp3"), "-af",
+         "equalizer=f=400:t=q:w=1.0:g=2.5", "-ar", str(SR), os.path.join(d, "_bed_eq.wav")])
+    bed = decode(os.path.join(d, "_bed_eq.wav"), mono=False)
     bed_track = np.zeros((n, 2), np.float32)
     off = int(MUSIC_DELAY * SR)
     m = min(len(bed), n - off)
     bed_track[off:off + m] = bed[:m]
     fade_in = int(0.5 * SR)
     bed_track[off:off + fade_in] *= np.linspace(0, 1, fade_in, dtype=np.float32)[:, None]
-    fo_n = int(0.5 * SR)
-    bed_track[-fo_n:] *= np.linspace(1, 0, fo_n, dtype=np.float32)[:, None]
+    fo_n = int(1.0 * SR)
+    bed_track[-fo_n:] *= np.linspace(1, 0, fo_n, dtype=np.float32)[:, None] ** 2
     bed_track *= 10 ** (BED_GAIN_DB / 20)
     duck, merged = envelope(windows, TOTAL)
     print("duck windows:", [(round(a, 2), round(b, 2)) for a, b in merged], file=sys.stderr)
@@ -258,7 +262,7 @@ def main():
     tex[:len(b)] += b
     # tuning click just before the first cut
     t = np.arange(int(0.03 * SR)) / SR
-    click = (0.35 * np.sin(2 * np.pi * 2400 * t) * np.exp(-t / 0.004)).astype(np.float32)
+    click = (0.06 * np.sin(2 * np.pi * 2400 * t) * np.exp(-t / 0.004)).astype(np.float32)
     i = int(0.59 * SR)
     tex[i:i + len(click)] += click
     # pink-ish hiss: constant faint floor + a louder band that rises with the voice
@@ -284,11 +288,10 @@ def main():
         tk = decode(os.path.join(d, "_tick.wav"))
         i = int(c * SR)
         tex[i:i + len(tk)] += tk[:n - i]
-    # the last 0.2 s: nothing
-    tex[int((TOTAL - 0.2) * SR):] = 0
-
-    # ---- sum, trim to -14 LUFS, limit
+    # ---- sum, fade the last 0.6 s to true zero, trim to -14 LUFS, limit
     mix = bed_track + vo_track[:, None] + tex[:, None]
+    fz = int(0.6 * SR)
+    mix[-fz:] *= np.linspace(1, 0, fz, dtype=np.float32)[:, None]
     pre_path = os.path.join(d, "_premix.wav")
     write_wav(pre_path, mix)
     I, tp = measure_lufs(pre_path)

@@ -48,7 +48,7 @@ def font(name, size):
 F_BODY = font("Inter-SemiBold.otf", 40)
 F_BODY_LIGHT = font("Inter-Medium.otf", 40)
 F_LETTER = font("InterDisplay-Medium.otf", 116)
-F_GIANT = font("InterDisplay-Black.otf", 600)
+F_GIANT = font("InterDisplay-Black.otf", 580)
 F_TINY = font("Inter-Medium.otf", 26)
 
 OFFWHITE = (233, 231, 227)
@@ -169,11 +169,11 @@ def draw_words(draw, text, fnt, x, y, t, times, color, light, align="left",
     words, boxes, _ = word_layout(text, fnt, x, y, align)
     n_shown = 0
     for i, w in enumerate(words):
-        if t < times[i]:
+        if t + 0.5 / FPS < times[i]:          # reveal on the nearest frame, never a frame late
             break
         n_shown = i + 1
         age = t - times[i]
-        col = light if age < 3.0 / FPS else color
+        col = light if age < 2.0 / FPS else color
         if fade > 0:
             col = mix_col(light, color, age / fade)
         draw.text((boxes[i][0], y), w, font=fnt, fill=col, anchor="ls")
@@ -562,10 +562,10 @@ def reveal_times(t0, n, step):
 
 def giant_word(img, draw, text, t_in, color, slide_from, dashes):
     """Oversized cropped wordmark with dashed guides, sliding in fast."""
-    e = ease_out(t_in / 0.42)
+    e = ease_out(t_in / 0.3)
     bbox = F_GIANT.getbbox(text)
     tw = bbox[2] - bbox[0]
-    x = (W - tw) / 2 - 0.02 * W + slide_from * (1 - e)
+    x = (W - tw) / 2 - bbox[0] + slide_from * (1 - e)
     y = H * 0.5 + (bbox[3] - bbox[1]) * 0.5 - bbox[3] * 0.0
     base_y = H * 0.5 + (bbox[3] - bbox[1]) / 2
     draw.text((x, base_y), text, font=F_GIANT, fill=color, anchor="ls")

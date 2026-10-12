@@ -37,8 +37,8 @@ DURATION = 30.0
 # ------------------------------------------------------------------ timeline
 T = dict(
     red=(0.0, 0.6),        # giant TWO on red
-    p1=(0.6, 2.9),         # paper: "TWO began with one question:"
-    plateQ=(2.9, 4.0),     # real: hand on chin (04.mov)
+    p1=(0.6, 3.0),         # paper: "TWO began with one question:"
+    plateQ=(3.0, 4.0),     # real: hand on chin (04.mov)
     p2=(4.0, 6.97),        # paper: "what does it really mean to create?"
     panel=(6.97, 8.68),    # real: walking figure cut out in colour, in the thermal slot
     p3=(8.68, 12.12),      # ignition -> thermal walk: "Not clothes for the sake of clothes."
@@ -62,9 +62,9 @@ PHRASE_TEXT = {
 }
 FALLBACK_START = {"p1": 0.8, "p2": 4.2, "p3": 8.9, "p4a": 12.35, "p4b": 14.05, "p5": 17.5, "p6": 20.9}
 CLIPS = {
-    "walk": "01.mov@2.2:scale=1.5:y=0.12",                # panel 2.2-4.0 s, thermal 4.0-7.2 s
+    "walk": "01.mov@2.45:scale=1.5:y=0.145",              # panel 2.45-4.16 s, thermal 4.16-7.6 s; feet clear the frame edge
     "seat": "05.mov@1.0:scale=1.5:y=0.22",                # seated profile, faces the text
-    "stand": "10.mov@4.2:flip:scale=1.6:y=0.08",          # head turns to camera ~1.2 s in
+    "stand": "10.mov@4.2:flip:scale=1.5:y=0.06",          # head turns to camera ~1.2 s in; clear of the text column
 }
 PLATES = {"plateQ": "Q", "plateS": "S", "plateG": "G"}
 PLATE_PUSH = {"plateQ": 0.0, "plateS": 0.0, "plateG": 0.05}
@@ -191,7 +191,7 @@ def frame_at(t, S, plates, times, idx):
         k = next(k for k in PLATES if in_scene(k))
         a, b = T[k]
         img = plates[k].frame(int(round((t - a) * FPS)), (t - a) / (b - a))
-        cut_glitch(k, (0, 0, W, H), 20, 2)
+        cut_glitch(k, (0, 0, W, H), 20, 1 if k == "plateS" else 2)
 
     # ---------- p1
     elif in_scene("p1"):
@@ -207,7 +207,7 @@ def frame_at(t, S, plates, times, idx):
         words, boxes, n = draw_words(d, PHRASE_TEXT["p1"], F_BODY, W * 0.5, y, t, tw, INK, INK_LIGHT, align="center")
         if n == 5:
             bx0, bx1 = boxes[4]
-            p = (t - (tw[-1] + 0.3)) / 0.45
+            p = (t - (tw[-1] + 0.35)) / 0.3
             draw_scribble(d, "underline", bx0 - 6, y + 12, (bx1 - bx0) + 12, 10, p, INK, width=3, seed=11)
         specks(d, t, 3, 5, (90, 88, 86), (W * 0.1, H * 0.15, W * 0.9, H * 0.85))
         cut_glitch("p1", (0, y - 70, W, y + 40), 14, 2)
@@ -221,7 +221,7 @@ def frame_at(t, S, plates, times, idx):
         words, boxes, n = draw_words(d, PHRASE_TEXT["p2"], F_BODY, W * 0.5, y, t, tw, INK, INK_LIGHT, align="center")
         if n == 7:
             bx0, bx1 = boxes[6]
-            p = (t - (tw[-1] + 0.35)) / 0.55
+            p = (t - (tw[-1] + 0.4)) / 0.5
             draw_scribble(d, "ellipse", (bx0 + bx1) / 2, y - 14, (bx1 - bx0) / 2 + 26, 36, p, INK, width=3, seed=23)
         specks(d, t, 4, 6, (90, 88, 86), (W * 0.1, H * 0.15, W * 0.9, H * 0.85))
         cut_glitch("p2", type_band, 14, 3)
@@ -254,9 +254,19 @@ def frame_at(t, S, plates, times, idx):
         d = ImageDraw.Draw(img)
         y = H * 0.47
         draw_words(d, PHRASE_TEXT["p3"], F_BODY, W * 0.07, y, t, times["p3"], CHALK, CHALK_LIGHT, fade=0.18)
-        p = (t - (T["p3"][0] + 0.6)) / 0.5
-        if 0 < p < 2.4:
-            draw_scribble(d, "arc", W * 0.60, H * 0.16, 90, 46, min(1, p), (240, 238, 232), width=2, seed=5)
+        ys, xs = np.nonzero(mask > 0.5)
+        if len(ys) > 50:
+            top = ys.min()
+            head_x = xs[ys < top + 8].mean() * R.MASK_SCALE
+            head_y = top * R.MASK_SCALE
+            if s < 1.1:
+                p = (s - 0.6) / 0.5
+            elif s < 1.9:
+                p = 1.0
+            else:
+                p = 1.0 - (s - 1.9) / 0.4
+            if p > 0:
+                draw_scribble(d, "arc", head_x + 10, head_y - 34, 80, 36, p, (240, 238, 232), width=2, seed=5)
         cut_glitch("p3", panel_box, 20, 2)
 
     # ---------- p4: thermal seated profile -> cooled shadow -> the print develops inside it
@@ -276,20 +286,20 @@ def frame_at(t, S, plates, times, idx):
         img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
         d = ImageDraw.Draw(img)
         y = H * 0.47
-        col = mix_col(CHALK, INK, cool)
-        light = mix_col(CHALK_LIGHT, INK_LIGHT, cool)
+        col = INK if cool >= 0.5 else CHALK
+        light = INK_LIGHT if cool >= 0.5 else CHALK_LIGHT
         if t < tb[0] - 0.05:
             draw_words(d, PHRASE_TEXT["p4a"], F_BODY, W * 0.07, y, t, ta, col, light, fade=0.18)
         else:
             words, boxes, n = draw_words(d, PHRASE_TEXT["p4b"], F_BODY, W * 0.07, y, t, tb, col, light, fade=0.18)
             if n == 3:
                 bx0, bx1 = boxes[2]
-                p = (t - (tb[-1] + 0.3)) / 0.5
+                p = (t - (tb[-1] + 0.35)) / 0.5
                 draw_scribble(d, "underline", bx0 - 4, y + 12, (bx1 - bx0) + 8, 9, p,
-                              mix_col(CHALK, RED, cool), width=3, seed=31)
+                              RED if cool >= 0.5 else CHALK, width=3, seed=31)
             if t - (tb[0] - 0.05) < 2 / FPS:
                 glitch.append(((0, y - 70, W * 0.55, y + 40), 14))
-        if T["p4"][1] - 3 / FPS <= t:                           # glitch on the panel just before the cut
+        if T["p4"][1] - 2 / FPS <= t:                           # glitch on the panel just before the cut
             glitch.append((panel_box, 18))
         cut_glitch("p4", panel_box, 18, 2)
 
@@ -320,7 +330,7 @@ def frame_at(t, S, plates, times, idx):
         img = bg_image("black")
         arr = np.array(img, np.float32)
         s = tl("p6")
-        fade_in = ease_out(s / 0.3)
+        fade_in = 0.35 + 0.65 * ease_out(s / 0.25)
         fade_out = 1 - ease_in_out((s - 2.2) / 0.8)              # gone before the hand reaches the mouth
         arr = render_silhouette(arr, S.stand.mask(s), t, "thermal", intensity=0.95 * fade_in * fade_out)
         img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
@@ -330,7 +340,7 @@ def frame_at(t, S, plates, times, idx):
         words, boxes, n = draw_words(d, PHRASE_TEXT["p6"], F_BODY, W * 0.07, y, t, tw, CHALK, CHALK_LIGHT, fade=0.2)
         if n == 7:
             bx0, bx1 = boxes[6]
-            p = (t - (tw[-1] + 0.3)) / 0.6
+            p = (t - (tw[-1] + 0.4)) / 0.55
             draw_scribble(d, "ellipse", (bx0 + bx1) / 2, y - 14, (bx1 - bx0) / 2 + 24, 34, p, (240, 238, 232), width=3, seed=51)
         cut_glitch("p6", (0, 0, W, H), 18, 2)
 
