@@ -81,20 +81,22 @@ ffmpeg -ss 15.6 -i footage/04.mov -t 3.1 -vf "fps=24,crop=900:675:166:540,scale=
 
 ### 30 秒版の構成
 
+カット点は音楽のアクセント（69.8 bpm、1.716 秒周期）の直前に置いている。
+
 | 時間 | 内容 |
 |---|---|
 | 0.0 – 0.6 | 赤カードの巨大「TWO」、ラジオのチューニングノイズ |
 | 0.6 – 2.9 | 紙地「TWO began with one question:」（VO 0.8〜） |
 | 2.9 – 4.0 | 実写プレート: 04.mov 顎に手を当てて考える |
-| 4.0 – 7.0 | 紙地「what does it really mean to create?」 |
-| 7.0 – 8.8 | 紙地に切り抜いた歩く人物（01.mov） |
-| 8.8 – 12.0 | 発火してサーマルに。「Not clothes for the sake of clothes.」 |
-| 12.0 – 16.0 | サーマルの横顔（05.mov）「but something intentional, / made with purpose.」→ 影 → 現像 |
-| 16.0 – 18.0 | 実写プレート: 10.mov 刺繍の袖口に手 |
-| 18.0 – 20.7 | T / W / O の文字「Each piece carries that search.」 |
-| 20.7 – 24.1 | サーマルの立ち姿（10.mov、こちらを向く）「I hope it resonates with you too.」 |
-| 24.1 – 27.0 | 実写プレート: 04.mov カメラを見る |
-| 27.0 – 30.0 | 巨大「TWO」のエンドカード、"made with purpose."、白にフェード |
+| 4.0 – 6.97 | 紙地「what does it really mean to create?」 |
+| 6.97 – 8.68 | 紙地に切り抜いた歩く人物（01.mov）、音楽が入る |
+| 8.68 – 12.12 | 発火してサーマルに。「Not clothes for the sake of clothes.」 |
+| 12.12 – 15.55 | サーマルの横顔（05.mov）「but something intentional, / made with purpose.」→ 影 → 現像 |
+| 15.55 – 17.3 | 実写プレート: 10.mov 刺繍の袖口に手 |
+| 17.3 – 20.7 | T / W / O の文字「Each piece carries that search.」 |
+| 20.7 – 24.13 | サーマルの立ち姿（10.mov、こちらを向く）「I hope it resonates with you too.」 |
+| 24.13 – 27.56 | 実写プレート: 04.mov カメラを見る（ゆっくり寄る） |
+| 27.56 – 30.0 | 音楽の最後のコードで巨大「TWO」、"made with purpose."、白にフェード |
 
 ## 必要なもの
 
