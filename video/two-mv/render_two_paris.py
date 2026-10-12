@@ -39,6 +39,70 @@ F_GIANT = ImageFont.truetype("/usr/share/fonts/opentype/inter/InterDisplay-Black
 F_CAP = ImageFont.truetype("/usr/share/fonts/opentype/inter/Inter-SemiBold.otf", 34)
 
 rng = np.random.default_rng(11)
+vrng = np.random.default_rng(23)
+SRC_W, SRC_H = 1040, 780                 # shots are extracted oversized; the handheld crop wanders inside
+
+
+def vhs(img, strong=False):
+    """Camcorder / VHS look on the window image (PIL RGB WIN_W x WIN_H):
+    soft luma, bleeding and shifted chroma, bloom, lifted blacks, noise, scanlines,
+    dropout streaks, head-switching noise at the bottom, occasional tearing."""
+    from PIL import ImageChops
+    small = img.resize((WIN_W // 2, WIN_H // 2), Image.BILINEAR)
+    y, cb, cr = small.convert("YCbCr").split()
+    y = y.filter(ImageFilter.GaussianBlur(0.6))
+    cb = cb.filter(ImageFilter.BoxBlur(4))
+    cr = ImageChops.offset(cr.filter(ImageFilter.BoxBlur(4)), 3, 0)
+    sm = Image.merge("YCbCr", (y, cb, cr)).convert("RGB")
+    bloom = Image.fromarray(np.clip((np.array(sm, np.float32) - 150) * 1.6, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(7))
+    arr = np.array(sm.resize((WIN_W, WIN_H), Image.BILINEAR), np.float32)
+    arr += 0.30 * np.array(bloom.resize((WIN_W, WIN_H), Image.BILINEAR), np.float32)
+    arr = arr * 0.90 + 14.0                                   # lifted blacks, soft-clipped whites
+    arr = np.where(arr > 225, 225 + (arr - 225) * 0.35, arr)
+    arr += vrng.normal(0, 4.5, (WIN_H, WIN_W, 1)).astype(np.float32)
+    arr += vrng.normal(0, 2.5, (WIN_H, WIN_W, 3)).astype(np.float32)
+    arr[1::2] *= 0.94                                         # scanlines
+    # dropout streaks
+    for _ in range(vrng.integers(2, 7) + (10 if strong else 0)):
+        r = vrng.integers(0, WIN_H); x0 = vrng.integers(0, WIN_W - 40); ln = vrng.integers(20, 160)
+        arr[r, x0:x0 + ln] = np.clip(arr[r, x0:x0 + ln] + vrng.choice([70, -45]), 0, 255)
+    # head-switching noise band at the bottom
+    for r in range(WIN_H - 9, WIN_H):
+        arr[r] = np.roll(arr[r], int(vrng.integers(-22, 22)), axis=0)
+        arr[r] = arr[r] * 0.6 + vrng.normal(90, 40, (WIN_W, 1))
+    # tearing: a band of rows shifted sideways
+    if strong or vrng.random() < 0.05:
+        r0 = vrng.integers(0, WIN_H - 70); h = vrng.integers(16, 64); dx = int(vrng.integers(8, 34)) * vrng.choice([-1, 1])
+        arr[r0:r0 + h] = np.roll(arr[r0:r0 + h], dx, axis=1)
+        if strong:
+            r1 = vrng.integers(0, WIN_H - 40); arr[r1:r1 + 6] = np.clip(arr[r1:r1 + 6] * 1.4 + 40, 0, 255)
+    # one-line vertical jitter
+    arr = np.roll(arr, int(vrng.integers(-1, 2)), axis=0)
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+
+
+def handheld_path(n, seed):
+    """Smooth random-walk offsets (pixels) for a handheld feel: slow drift plus a little tremor."""
+    r = np.random.default_rng(seed)
+    base = np.cumsum(r.normal(0, 1.6, (n + 24, 2)), axis=0)
+    k = np.hanning(13); k /= k.sum()
+    sm = np.stack([np.convolve(base[:, i], k, mode="same") for i in range(2)], 1)[:n]
+    sm -= sm.mean(0)
+    sm = np.clip(sm * 1.2, -26, 26)
+    return sm + r.normal(0, 0.9, (n, 2))
+
+
+def vhs_sticker(im):
+    """Match the cut-outs to the window: a little saturation, softness and warmth, no outline."""
+    rgb = im.convert("RGB").resize((im.width // 2, im.height // 2), Image.BILINEAR).resize(im.size, Image.BILINEAR)
+    arr = np.array(rgb, np.float32)
+    grey = arr.mean(2, keepdims=True)
+    arr = grey + (arr - grey) * 1.35
+    arr = (arr - 128) * 1.15 + 128 + 14
+    arr *= np.array([1.05, 1.0, 0.96], np.float32)
+    out = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)).convert("RGBA")
+    out.putalpha(im.split()[3])
+    return out
 
 
 def ease_out(t):
@@ -52,24 +116,28 @@ def ease_in(t):
 
 
 class Shot:
-    def __init__(self, folder):
+    def __init__(self, folder, seed=0):
         self.files = sorted(os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".png"))
+        self.path = handheld_path(len(self.files) + 4, seed)
 
     def frame(self, i):
-        return Image.open(self.files[min(max(i, 0), len(self.files) - 1)]).convert("RGB")
+        i = min(max(i, 0), len(self.files) - 1)
+        im = Image.open(self.files[i]).convert("RGB")
+        if im.size != (WIN_W, WIN_H):
+            ox, oy = self.path[i]
+            x0 = int((im.width - WIN_W) / 2 + ox)
+            y0 = int((im.height - WIN_H) / 2 + oy)
+            x0 = min(max(x0, 0), im.width - WIN_W)
+            y0 = min(max(y0, 0), im.height - WIN_H)
+            im = im.crop((x0, y0, x0 + WIN_W, y0 + WIN_H))
+        return im
 
 
-def load_sticker(path, max_h=520, max_w=640):
+def load_sticker(path, max_h=540, max_w=660):
     im = Image.open(path).convert("RGBA")
     s = min(max_h / im.height, max_w / im.width)
     im = im.resize((max(1, int(im.width * s)), max(1, int(im.height * s))), Image.LANCZOS)
-    # a thin paper-white outline, like a cut sticker
-    a = im.split()[3]
-    edge = a.filter(ImageFilter.MaxFilter(7))
-    outline = Image.new("RGBA", im.size, (240, 238, 232, 0))
-    outline.putalpha(edge)
-    out = Image.alpha_composite(outline, im)
-    return out
+    return vhs_sticker(im)
 
 
 def logo_sticker():
@@ -115,7 +183,7 @@ def main():
     cuts = beats["cuts"]                     # start time of shot k = cuts[k]; the logo lands at cuts[-1]
     end_t = beats["end"]
     shots_meta = [l.split() for l in open(os.path.join(P, "shots.txt")) if l.strip() and not l.startswith("#")]
-    shots = [Shot(os.path.join(P, "shots", m[0])) for m in shots_meta]
+    shots = [Shot(os.path.join(P, "shots", m[0]), seed=i * 7 + 1) for i, m in enumerate(shots_meta)]
     stickers = [load_sticker(os.path.join(P, "stickers", m[0] + "_cut.png")) for m in shots_meta]
     n_shots = len(shots)
     assert len(cuts) >= n_shots + 1, "beats.json needs one cut per shot plus the logo landing"
@@ -123,7 +191,7 @@ def main():
     logo_small = logo.resize((int(WIN_W * 0.36), int(WIN_H * 0.36)), Image.LANCZOS)
     # sticker x positions: wander around the window's middle
     xs = [W / 2 + rng.uniform(-0.22, 0.22) * WIN_W for _ in range(n_shots + 1)]
-    hover_y = WIN_Y - 40                     # sticker bottom sits a little above the window
+    hover_y = WIN_Y - 6                      # sticker bottom sits right on the window's top edge
     total_frames = int(round(end_t * FPS))
 
     cmd = ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
@@ -151,10 +219,11 @@ def main():
                 fw, fh = frame.size
                 cw, ch = int(fw / z), int(fh / z)
                 frame = frame.crop(((fw - cw) // 2, (fh - ch) // 2, (fw - cw) // 2 + cw, (fh - ch) // 2 + ch)).resize((fw, fh), Image.BILINEAR)
+            frame = vhs(frame, strong=(local < 2 / FPS))
             if k == 0 and t < cuts[0]:
                 # opener: checkerboard dissolve into the first shot during the pre-roll
                 p = t / max(cuts[0], 1e-6)
-                frame = shots[0].frame(0)
+                frame = vhs(shots[0].frame(0))
                 m = np.zeros((WIN_H, WIN_W), np.uint8)
                 cell = 36
                 yy, xx = np.mgrid[0:WIN_H, 0:WIN_W]
@@ -204,6 +273,9 @@ def main():
         img = canvas.convert("RGB")
         arr = np.array(img, np.float32)
         arr += R.rng_global.normal(0, 3.5, (H, W, 1)).astype(np.float32)
+        fade = min(max((t - (end_t - 0.4)) / 0.4, 0.0), 1.0)
+        if fade > 0:
+            arr *= (1 - fade)
         proc.stdin.write(np.clip(arr, 0, 255).astype(np.uint8).tobytes())
         if fi % 48 == 0:
             print(f"  {t:5.2f}s / {end_t:.2f}s", file=sys.stderr)
