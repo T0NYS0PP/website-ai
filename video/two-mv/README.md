@@ -98,6 +98,23 @@ ffmpeg -ss 15.6 -i footage/04.mov -t 3.1 -vf "fps=24,crop=900:675:166:540,scale=
 | 24.13 – 27.56 | 実写プレート: 04.mov カメラを見る（ゆっくり寄る） |
 | 27.56 – 30.0 | 音楽の最後のコードで巨大「TWO」、"made with purpose."、白にフェード |
 
+## 縦型ビートカット版（2 本目の参考動画のスタイル）
+
+`render_two_paris.py`: 1080x1920 の黒地に 4:3 の小窓。1 拍（83 bpm、0.723 秒）ごとに 1 ショット。
+各ショットの間、次のショットの被写体を切り抜いた「ステッカー」が小窓の上にポップして揺れ、
+カットの瞬間に落下して次のショットになる。最後は赤い「TWO」カードが落ちてきてエンドカード。
+
+```
+# 18 ショットの定義は paris/shots.txt（idx clip t_in crop）。切り出しとステッカー:
+#   shots/<idx>/*.png は ffmpeg の crop + グレード、stickers/<idx>_cut.png は rembg（u2net）の切り抜き
+python3 beats.py paris/beat.mp3 paris/beats.json --shots 18 --bpm 83 --tail 1.7   # ビートの格子 -> カット点
+python3 mix_paris.py --music paris/beat.mp3 --beats paris/beats.json --out paris/mix.wav   # ポップ音と落下音を合成
+python3 render_two_paris.py out/TWO_beatcut.mp4 --paris paris --audio paris/mix.wav
+```
+
+音楽は ElevenLabs Music v2.5 で生成した 16 秒の lo-fi hip hop（83 bpm、インスト）。出力は
+`out/TWO_beatcut_1080x1920.mp4` と `out/TWO_beatcut_720x1280.mp4`。
+
 ## 必要なもの
 
 - Python 3 + Pillow + numpy（切り抜きには rembg + onnxruntime）

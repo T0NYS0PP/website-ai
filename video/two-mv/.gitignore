@@ -4,3 +4,7 @@ proxies/
 __pycache__/
 real/
 audio/*.wav
+paris/shots/
+paris/stickers/*.png
+!paris/stickers/*_cut.png
+paris/*.wav
