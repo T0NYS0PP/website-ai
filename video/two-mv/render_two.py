@@ -318,23 +318,42 @@ def procedural_mask(t, slot):
 class FootageSlot:
     """Frames of a real clip, keyed by luminance, at mask resolution."""
 
-    invert = False   # set True when the subject is darker than the backdrop
+    invert = None    # None = auto-detect per clip, True/False = force
 
-    def __init__(self, path, tmpdir):
+    def __init__(self, path, tmpdir, offset=0.0):
         self.dir = os.path.join(tmpdir, os.path.basename(path) + "_frames")
         os.makedirs(self.dir, exist_ok=True)
         subprocess.run([
-            "ffmpeg", "-v", "error", "-y", "-i", path,
+            "ffmpeg", "-v", "error", "-y", "-ss", str(offset), "-i", path,
+            "-t", "6",
             "-vf", f"fps={FPS},scale={MW}:{MH}:force_original_aspect_ratio=increase,"
                    f"crop={MW}:{MH},format=gray",
             os.path.join(self.dir, "%05d.png")], check=True)
         self.n = len(os.listdir(self.dir))
+        self.inv = FootageSlot.invert
+        if self.inv is None:
+            self.inv = self._detect_polarity()
+
+    def _frame(self, i):
+        im = Image.open(os.path.join(self.dir, f"{i:05d}.png"))
+        return np.array(im, np.float32) / 255.0
+
+    def _detect_polarity(self):
+        """True when the subject (frame centre) is darker than the backdrop
+        (frame border), e.g. a dark garment against a white wall."""
+        samples = [self._frame(i) for i in range(1, self.n + 1, max(1, self.n // 6))]
+        border, centre = [], []
+        for a in samples:
+            h, w = a.shape
+            border.append(np.median(np.concatenate([a[:h // 8].ravel(), a[-h // 8:].ravel(),
+                                                    a[:, :w // 8].ravel(), a[:, -w // 8:].ravel()])))
+            centre.append(np.median(a[h // 4:-h // 4, w // 4:-w // 4]))
+        return float(np.median(centre)) < float(np.median(border))
 
     def mask(self, t_local):
         i = int(t_local * FPS) % max(1, self.n) + 1
-        im = Image.open(os.path.join(self.dir, f"{i:05d}.png"))
-        arr = np.array(im, np.float32) / 255.0
-        if self.invert:
+        arr = self._frame(i)
+        if self.inv:
             arr = 1.0 - arr
         # key: brighter than the dark backdrop -> part of the subject
         lo, hi = 0.18, 0.45
@@ -626,7 +645,9 @@ def frame_at(t, slots, frame_idx):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
-    ap.add_argument("--footage", help="dir with clipA.mp4 clipB.mp4 clipC.mp4")
+    ap.add_argument("--footage", help="dir with the MV clips (.mov/.mp4)")
+    ap.add_argument("--clips", help="comma list of 3 file names in --footage, in scene order")
+    ap.add_argument("--offsets", help="comma list of 3 in-points (seconds) for the clips")
     ap.add_argument("--start", type=float, default=0.0)
     ap.add_argument("--end", type=float, default=DURATION)
     ap.add_argument("--crf", type=int, default=20)
@@ -636,13 +657,25 @@ def main():
 
     tmpdir = tempfile.mkdtemp(prefix="two_mv_")
     slots = []
-    for i, name in enumerate(["clipA.mp4", "clipB.mp4", "clipC.mp4"]):
-        path = os.path.join(args.footage, name) if args.footage else None
+    clips = []
+    if args.footage:
+        if args.clips:
+            clips = [os.path.join(args.footage, c.strip()) for c in args.clips.split(",")]
+        else:
+            names = sorted(n for n in os.listdir(args.footage)
+                           if n.lower().endswith((".mov", ".mp4", ".m4v", ".mkv")))
+            # legacy names clipA/B/C first, else the first three clips in name order
+            legacy = [n for n in names if n.lower().startswith("clip")]
+            clips = [os.path.join(args.footage, n) for n in (legacy or names)[:3]]
+    offsets = [float(x) for x in args.offsets.split(",")] if args.offsets else []
+    for i in range(3):
+        path = clips[i] if i < len(clips) else None
         if path and os.path.exists(path):
-            FootageSlot.invert = args.key_invert
-            fs = FootageSlot(path, tmpdir)
+            if args.key_invert:
+                FootageSlot.invert = True
+            fs = FootageSlot(path, tmpdir, offsets[i] if i < len(offsets) else 0.0)
             slots.append(fs.mask)
-            print(f"slot {i}: {path} ({fs.n} frames)", file=sys.stderr)
+            print(f"slot {i}: {path} ({fs.n} frames, invert={fs.inv})", file=sys.stderr)
         else:
             slots.append(lambda tl, s=i: procedural_mask(tl, s))
             print(f"slot {i}: procedural garment silhouette", file=sys.stderr)
