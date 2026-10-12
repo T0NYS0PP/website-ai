@@ -8,3 +8,5 @@ paris/shots/
 paris/stickers/*.png
 !paris/stickers/*_cut.png
 paris/*.wav
+paris/beat_v*.mp3
+paris/beats_v*.json
