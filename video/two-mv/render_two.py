@@ -377,7 +377,10 @@ class FootageSlot:
     def __init__(self, path, offset=0.0, duration=3.8, flip=False, scale=1.25,
                  method="auto", ypos=0.04, model="u2net", cache_dir=None):
         self.path = path
+        self.offset, self.flip, self.scale, self.ypos = offset, flip, scale, ypos
         height = int(round(MH * scale / 2)) * 2
+        W0, H0 = _probe_dims(path)
+        self.geom = (int(round(W0 * height / H0 / 2)) * 2, height)   # (w, h) at mask resolution
         tag = f"{os.path.basename(path)}_{offset}_{duration}_{int(flip)}_{scale}_{method}-{model}_{ypos}_{MW}x{MH}"
         cache_dir = cache_dir or os.path.join(os.path.dirname(path) or ".", ".cache")
         os.makedirs(cache_dir, exist_ok=True)
@@ -425,6 +428,40 @@ class FootageSlot:
     def mask(self, t_local):
         i = min(int(t_local * FPS), len(self.masks) - 1)
         return self.masks[i]
+
+    def mask_full(self, t_local, feather=2.0):
+        """The matte at full resolution (H x W x 1 float), lightly feathered."""
+        m = Image.fromarray((self.mask(t_local) * 255).astype(np.uint8)).resize((W, H), Image.BILINEAR)
+        if feather:
+            m = m.filter(ImageFilter.GaussianBlur(feather))
+        return np.array(m, np.float32)[..., None] / 255.0
+
+    def color(self, t0, t1):
+        """Full-res RGB frames (n,H,W,3) uint8 of local time [t0,t1), placed exactly like the masks."""
+        w, h = self.geom
+        return placed_color_frames(self.path, self.offset + t0, t1 - t0, self.flip, w, h, self.ypos)
+
+
+def placed_color_frames(path, offset, duration, flip, mask_w, mask_h, ypos):
+    """Colour frames of a clip window at MASK_SCALE x the mask geometry, so a
+    FootageSlot's mask and these frames line up pixel for pixel."""
+    hs, w = mask_h * MASK_SCALE, mask_w * MASK_SCALE
+    vf = f"fps={FPS},scale={w}:{hs}" + (",hflip" if flip else "")
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(offset), "-i", path, "-t", str(duration),
+                          "-vf", vf, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                         capture_output=True, check=True).stdout
+    n = len(raw) // (hs * w * 3)
+    fr = np.frombuffer(raw[:n * hs * w * 3], np.uint8).reshape(n, hs, w, 3)
+    y0 = int(ypos * mask_h) * MASK_SCALE
+    y1 = min(hs, y0 + H)
+    out = np.zeros((n, H, W, 3), np.uint8)
+    if w >= W:
+        xc = ((mask_w - MW) // 2) * MASK_SCALE
+        out[:, :y1 - y0, :] = fr[:, y0:y1, xc:xc + W]
+    else:
+        xo = (MW - mask_w - int(0.02 * MW)) * MASK_SCALE
+        out[:, :y1 - y0, xo:xo + w] = fr[:, y0:y1, :]
+    return out
 
 
 def parse_clip_spec(spec, footage_dir):

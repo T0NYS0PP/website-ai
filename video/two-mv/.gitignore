@@ -2,3 +2,5 @@ out/*.mp4
 footage/
 proxies/
 __pycache__/
+real/
+audio/*.wav

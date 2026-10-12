@@ -51,6 +51,51 @@ python3 -m venv ../../.segenv && ../../.segenv/bin/pip install "rembg[cpu]"
 
 素材の確認用に `./make_sheets.sh` で 480p のプロキシとタイムコード付きコンタクトシートを `proxies/` に作れる。
 
+## 30 秒版（ナレーション + 音楽 + 実写）
+
+`render_two_30s.py` は 21.8 秒版の見た目をそのままに、次を加えた 30 秒のカット。
+
+- ナレーション: ElevenLabs（voice "Kirk"、eleven_v4）で台本を読み上げ、1970 年代の US ラジオ風に加工
+  （230 Hz〜4.6 kHz の帯域制限、6:1 コンプ、テープ的なソフトクリップ、モノラル、微かなヒス）
+- 音楽: ElevenLabs Music v2.5 の 30 秒インスト（メロウな 70s ソウルジャズのベッド）。
+  ナレーション中はサイドチェインで自動的に下がる。最後のコードがエンドカードの下で鳴り終わる
+- 実写: 縦素材を 4:3 に切り出し、紙とインクの二色調（元の色を 30% だけ残す）に焼き込んで挿入。
+  歩きのカットは人物を切り抜いた状態からサーマルに「発火」するマッチカット、
+  座りのカットは影に冷えたあと二色調の実写が「現像」される
+- 文字は Scribe の単語タイムスタンプに合わせて 2 フレーム先行して出る
+
+### 手順
+
+```
+# 1. 素材と切り抜き環境（上と同じ）
+# 2. audio/ に vo_take.mp3（ナレーション）、vo_words.json（Scribe の単語タイムスタンプ）、music.mp3 を置く
+python3 mix_audio.py --audio audio          # -> audio/mix.wav, audio/vo_timing.json
+# 3. 実写プレートの切り出し（ungraded、1512x1134）
+ffmpeg -ss 0.2  -i footage/04.mov -t 1.3 -vf "fps=24,crop=900:675:166:560,scale=1512:1134:flags=lanczos" real/Q/%04d.png
+ffmpeg -ss 11.6 -i footage/10.mov -t 2.2 -vf "fps=24,crop=900:675:150:560,scale=1512:1134:flags=lanczos" real/S/%04d.png
+ffmpeg -ss 15.6 -i footage/04.mov -t 3.1 -vf "fps=24,crop=900:675:166:540,scale=1512:1134:flags=lanczos" real/G/%04d.png
+# 4. レンダリング
+../../.segenv/bin/python render_two_30s.py out/TWO_30s.mp4 --footage footage --real real \
+    --timing audio/vo_timing.json --audio audio/mix.wav
+```
+
+### 30 秒版の構成
+
+| 時間 | 内容 |
+|---|---|
+| 0.0 – 0.6 | 赤カードの巨大「TWO」、ラジオのチューニングノイズ |
+| 0.6 – 2.9 | 紙地「TWO began with one question:」（VO 0.8〜） |
+| 2.9 – 4.0 | 実写プレート: 04.mov 顎に手を当てて考える |
+| 4.0 – 7.0 | 紙地「what does it really mean to create?」 |
+| 7.0 – 8.8 | 紙地に切り抜いた歩く人物（01.mov） |
+| 8.8 – 12.0 | 発火してサーマルに。「Not clothes for the sake of clothes.」 |
+| 12.0 – 16.0 | サーマルの横顔（05.mov）「but something intentional, / made with purpose.」→ 影 → 現像 |
+| 16.0 – 18.0 | 実写プレート: 10.mov 刺繍の袖口に手 |
+| 18.0 – 20.7 | T / W / O の文字「Each piece carries that search.」 |
+| 20.7 – 24.1 | サーマルの立ち姿（10.mov、こちらを向く）「I hope it resonates with you too.」 |
+| 24.1 – 27.0 | 実写プレート: 04.mov カメラを見る |
+| 27.0 – 30.0 | 巨大「TWO」のエンドカード、"made with purpose."、白にフェード |
+
 ## 必要なもの
 
 - Python 3 + Pillow + numpy（切り抜きには rembg + onnxruntime）

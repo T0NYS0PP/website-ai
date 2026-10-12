@@ -1,0 +1,208 @@
+{
+ "phrases": [
+  {
+   "key": "p1",
+   "text": "TWO began with one question:",
+   "start": 0.8,
+   "end": 2.64,
+   "words": [
+    {
+     "w": "TWO",
+     "t": 0.717
+    },
+    {
+     "w": "began",
+     "t": 0.997
+    },
+    {
+     "w": "with",
+     "t": 1.477
+    },
+    {
+     "w": "one",
+     "t": 1.757
+    },
+    {
+     "w": "question:",
+     "t": 2.037
+    }
+   ]
+  },
+  {
+   "key": "p2",
+   "text": "what does it really mean to create?",
+   "start": 4.2,
+   "end": 6.28,
+   "words": [
+    {
+     "w": "what",
+     "t": 4.117
+    },
+    {
+     "w": "does",
+     "t": 4.257
+    },
+    {
+     "w": "it",
+     "t": 4.457
+    },
+    {
+     "w": "really",
+     "t": 4.737
+    },
+    {
+     "w": "mean",
+     "t": 5.177
+    },
+    {
+     "w": "to",
+     "t": 5.557
+    },
+    {
+     "w": "create?",
+     "t": 5.717
+    }
+   ]
+  },
+  {
+   "key": "p3",
+   "text": "Not clothes for the sake of clothes.",
+   "start": 9.0,
+   "end": 10.72,
+   "words": [
+    {
+     "w": "Not",
+     "t": 8.917
+    },
+    {
+     "w": "clothes",
+     "t": 9.177
+    },
+    {
+     "w": "for",
+     "t": 9.557
+    },
+    {
+     "w": "the",
+     "t": 9.677
+    },
+    {
+     "w": "sake",
+     "t": 9.817
+    },
+    {
+     "w": "of",
+     "t": 10.017
+    },
+    {
+     "w": "clothes.",
+     "t": 10.177
+    }
+   ]
+  },
+  {
+   "key": "p4a",
+   "text": "but something intentional,",
+   "start": 12.2,
+   "end": 13.52,
+   "words": [
+    {
+     "w": "but",
+     "t": 12.117
+    },
+    {
+     "w": "something",
+     "t": 12.317
+    },
+    {
+     "w": "intentional,",
+     "t": 12.757
+    }
+   ]
+  },
+  {
+   "key": "p4b",
+   "text": "made with purpose.",
+   "start": 13.9,
+   "end": 14.82,
+   "words": [
+    {
+     "w": "made",
+     "t": 13.817
+    },
+    {
+     "w": "with",
+     "t": 14.017
+    },
+    {
+     "w": "purpose.",
+     "t": 14.237
+    }
+   ]
+  },
+  {
+   "key": "p5",
+   "text": "Each piece carries that search.",
+   "start": 18.2,
+   "end": 20.02,
+   "words": [
+    {
+     "w": "Each",
+     "t": 18.117
+    },
+    {
+     "w": "piece",
+     "t": 18.417
+    },
+    {
+     "w": "carries",
+     "t": 18.937
+    },
+    {
+     "w": "that",
+     "t": 19.337
+    },
+    {
+     "w": "search.",
+     "t": 19.577
+    }
+   ]
+  },
+  {
+   "key": "p6",
+   "text": "I hope it resonates with you too.",
+   "start": 20.9,
+   "end": 22.380000000000003,
+   "words": [
+    {
+     "w": "I",
+     "t": 20.817
+    },
+    {
+     "w": "hope",
+     "t": 20.877
+    },
+    {
+     "w": "it",
+     "t": 21.057
+    },
+    {
+     "w": "resonates",
+     "t": 21.197
+    },
+    {
+     "w": "with",
+     "t": 21.697
+    },
+    {
+     "w": "you",
+     "t": 21.877
+    },
+    {
+     "w": "too.",
+     "t": 22.057
+    }
+   ]
+  }
+ ]
+}
