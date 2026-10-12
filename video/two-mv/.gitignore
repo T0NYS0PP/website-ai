@@ -1,2 +1,4 @@
 out/*.mp4
 footage/
+proxies/
+__pycache__/
